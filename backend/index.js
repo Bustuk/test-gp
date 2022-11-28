@@ -8,8 +8,8 @@ const config = {
   login: 'focus02',
   password: ''
 };
-
-dialer.configure(config);  
+const { Server } = require('socket.io');
+dialer.configure(null);  
 
 httpServer.use(bodyParser.json());
 httpServer.use(cors());
@@ -21,40 +21,41 @@ httpServer.use(function(req, res, next) {
 
 
 // Serwer nasłuchuje na porcie 3000
-httpServer.listen(3000, function () {
+const server = httpServer.listen(3000, function () {
   console.log('Example app listening on port 3000!')
   // adres url możemy wygenerować za pomocą komendy
   // gp url 3000
 })
+const io = new Server(server)
+
+io.on("connection", (socket) => { // nasłuchujemy na rozpoczęcie połączenia
+  console.log('Połączono socket');
+  io.emit("status", 5555);
+});
 
 httpServer.post('/call/', async (req, res) => {
   const number1 = req.body.number;
-  const number2 = 'XXXXXXXXXX' // tutaj dejemy swój numer
+  const number2 = '555555555' // tutaj dejemy swój numer
   console.log('Dzwonie', number1, number2)
   bridge = await dialer.call(number1, number2);
+  let oldStatus = null
   let interval = setInterval(async () => {
-    let status = await bridge.getStatus();
-    console.log(status)
-    if (
-      status === "ANSWERED" ||
-      status === "FAILED" ||
-      status === "BUSY" ||
-      status === "NO ANSWER"
-    ) {
-      console.log("stop");
-      clearInterval(interval);
+    let currentStatus = await bridge.getStatus();
+    if (currentStatus !== oldStatus) {
+      console.log('WYSYŁAM status', currentStatus)
+       oldStatus = currentStatus
+       io.emit('status', currentStatus)
     }
-  }, 2000);
-  res.json({ success: true });
+    if (
+      currentStatus === "ANSWERED" ||
+      currentStatus === "FAILED" ||
+      currentStatus === "BUSY" ||
+      currentStatus === "NO ANSWER"
+  ) {
+      console.log('stop')
+      clearInterval(interval)
+  }
+ }, 1000)
+ res.json({ id: '123', status: bridge.STATUSES.NEW });
  })
-
-
-
-httpServer.get('/test/', async (req, res) => {
-  // const number1 = req.body.number;
-  console.log('WPADA test')
-  const number1 = '792751705'
-  const number2 = '503777158';
-  //await callback(number1, number2)
-  res.json({ success: true });
- })
+ 
